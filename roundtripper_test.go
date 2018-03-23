@@ -87,3 +87,79 @@ func TestMuxRoundTripper_AddFunc(t *testing.T) {
 		}
 	}
 }
+
+func TestMuxRoundTripper_Get_error(t *testing.T) {
+	mux := mockhttp.MuxRoundTripper{}
+	mux.AddFunc("www.google.com", func(r *http.Request) (resp *http.Response, err error) {
+		resp = &http.Response{
+			Body: ioutil.NopCloser(strings.NewReader("This is a mocked google page")),
+		}
+		return
+	})
+	mux.AddFunc("www.facebook.com", func(r *http.Request) (resp *http.Response, err error) {
+		resp = &http.Response{
+			Body: ioutil.NopCloser(strings.NewReader("This is a mocked facebook page")),
+		}
+		return
+	})
+
+	rt, err := mux.Get("www.foobar.com")
+	if err == nil {
+		t.Errorf("expected error, got nil")
+		return
+	}
+	if want, have := "no http.RoundTripper found for host www.foobar.com", err.Error(); want != have {
+		t.Errorf("expected %#v, got %#v", want, have)
+	}
+	if rt != nil {
+		t.Errorf("expected nil, got %#v", rt)
+	}
+
+	req, err := http.NewRequest("GET", "http://www.foobar.com/helloworld", nil)
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+	resp, err := mux.RoundTrip(req)
+	if err == nil {
+		t.Errorf("expected error, got nil")
+		return
+	}
+	if want, have := "no http.RoundTripper found for host www.foobar.com", err.Error(); want != have {
+		t.Errorf("expected %#v, got %#v", want, have)
+	}
+	if resp != nil {
+		t.Errorf("expected nil, got %#v", rt)
+	}
+
+}
+
+func TestMuxRoundTripper_NewClient(t *testing.T) {
+	mux := mockhttp.MuxRoundTripper{}
+	mux.AddFunc("www.google.com", func(r *http.Request) (resp *http.Response, err error) {
+		resp = &http.Response{
+			Body: ioutil.NopCloser(strings.NewReader("This is a mocked google page")),
+		}
+		return
+	})
+
+	r, err := mux.NewClient().Get("https://www.google.com")
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+	if r == nil {
+		t.Errorf("expected response, got nil")
+		return
+	}
+
+	c, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	if want, have := "This is a mocked google page", string(c); want != have {
+		t.Errorf("expected: %#v, got %#v", want, have)
+	}
+}
