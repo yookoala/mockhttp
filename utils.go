@@ -67,7 +67,7 @@ func ServerErrorRT(status int) RoundTripperFunc {
 // TransportErrorRT always return nil server response
 // wtih the supplied error
 func TransportErrorRT(err error) RoundTripperFunc {
-	return func(r *http.Request) (resp *http.Response, err error) {
+	return func(r *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 }
@@ -109,15 +109,60 @@ func FileSystemRT(root string) RoundTripperFunc {
 
 		path := filepath.Join(root, r.URL.Path)
 		f, err := os.Open(path)
+
+		if os.IsNotExist(err) {
+			// if path not found: 404
+			statusText := http.StatusText(http.StatusNotFound)
+			size := int64(len(statusText))
+			header := make(http.Header)
+			header.Add("Content-Length", fmt.Sprintf("%d", size))
+			header.Add("Content-Type", "text/plain")
+			header.Add("Date", time.Now().Format(time.RFC1123))
+			resp = &http.Response{
+				Status:        statusText,
+				StatusCode:    http.StatusNotFound,
+				Proto:         r.Proto,
+				ProtoMajor:    r.ProtoMajor,
+				ProtoMinor:    r.ProtoMinor,
+				ContentLength: size,
+				Request:       r,
+				Header:        header,
+				Body:          ioutil.NopCloser(strings.NewReader(statusText)),
+			}
+			return resp, nil
+		}
 		if err != nil {
-			return nil, fmt.Errorf("error openning path: %s",
-				err)
+			// return other errors directly
+			// TODO: improve handle of other PathError
+			return
 		}
 
 		s, err := f.Stat()
 		if err != nil {
 			return nil, fmt.Errorf("error getting file stat: %s",
 				err)
+		}
+
+		if s.IsDir() {
+			status := http.StatusForbidden
+			statusText := http.StatusText(status)
+			size := int64(len(statusText))
+			header := make(http.Header)
+			header.Add("Content-Length", fmt.Sprintf("%d", size))
+			header.Add("Content-Type", "text/plain")
+			header.Add("Date", time.Now().Format(time.RFC1123))
+			resp = &http.Response{
+				Status:        statusText,
+				StatusCode:    status,
+				Proto:         r.Proto,
+				ProtoMajor:    r.ProtoMajor,
+				ProtoMinor:    r.ProtoMinor,
+				ContentLength: size,
+				Request:       r,
+				Header:        header,
+				Body:          ioutil.NopCloser(strings.NewReader(statusText)),
+			}
+			return
 		}
 
 		// detect content type by extension
