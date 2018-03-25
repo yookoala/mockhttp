@@ -1,10 +1,12 @@
 package mockhttp_test
 
 import (
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/yookoala/mockhttp"
 )
@@ -162,4 +164,68 @@ func TestMuxRoundTripper_NewClient(t *testing.T) {
 	if want, have := "This is a mocked google page", string(c); want != have {
 		t.Errorf("expected: %#v, got %#v", want, have)
 	}
+}
+
+func mustTimePtr(t time.Time, err error) *time.Time {
+	if err != nil {
+		panic(err)
+	}
+	return &t
+}
+
+func ExampleMuxRoundTripper() {
+
+	// a mock transport layer for testing your API calls / resource download
+	mock := mockhttp.NewMuxRoundTripper()
+	mock.Add("api.service1.com", mockhttp.StaticResponseRT(`{"status": "OK", "cool": true}`, "application/json"))
+	mock.Add("api.service2.com", mockhttp.StaticResponseRT(`{"status": "OK", "cool": true}`, "application/json"))
+	mock.Add("api.service3.com", mockhttp.ServerErrorRT(http.StatusInternalServerError))
+	mock.Add("mycdn-service.com", mockhttp.FileSystemRT("./testdata"))
+	mock.Add("*", mockhttp.TransportErrorRT(fmt.Errorf("no network"))) // as fallback
+
+	// simply produces http.Client with the MuxRoundTripper as transport
+	client := mock.NewClient()
+
+	var resp *http.Response
+	var body []byte
+	var err error
+
+	// ordinary http.NewRequest routine
+	req, _ := http.NewRequest("GET", "https://api.service1.com/some/endpoint", nil)
+	resp, _ = client.Do(req)
+	body, _ = ioutil.ReadAll(resp.Body)
+	fmt.Printf("result 1 - %s\n", body)
+
+	// directly use http.Client methods
+	resp, _ = client.Get("https://api.service1.com/some/endpoint")
+	body, _ = ioutil.ReadAll(resp.Body)
+	fmt.Printf("result 2 - %s\n", body)
+
+	// POST with http.Client method
+	resp, _ = client.Post("https://api.service2.com/some/endpoint", "application/json", strings.NewReader(`{"submit": true}`))
+	body, _ = ioutil.ReadAll(resp.Body)
+	fmt.Printf("result 3 - %s\n", body)
+
+	// POST to an endpoint with mock server error
+	resp, _ = client.Post("https://api.service3.com/some/endpoint", "application/json", strings.NewReader(`{"submit": true}`))
+	body, _ = ioutil.ReadAll(resp.Body)
+	fmt.Printf("result 4 - %s\n", body)
+
+	// GET a text file, in local file system, with content "hello world"
+	resp, _ = client.Get("https://mycdn-service.com/test.txt")
+	body, _ = ioutil.ReadAll(resp.Body)
+	fmt.Printf("result 5 - %s\n", body)
+
+	// GET an external service with mock transport,
+	// which will be handled by "*" host handler.
+	_, err = client.Get("https://api.google.com/some/endpoint")
+	fmt.Printf("result 6 - %s\n", err.Error())
+
+	// Output:
+	// result 1 - {"status": "OK", "cool": true}
+	// result 2 - {"status": "OK", "cool": true}
+	// result 3 - {"status": "OK", "cool": true}
+	// result 4 - Internal Server Error
+	// result 5 - hello world
+	// result 6 - Get https://api.google.com/some/endpoint: no network
 }
