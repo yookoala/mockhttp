@@ -16,6 +16,11 @@ func (rt RoundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) {
 // MuxRoundTripper mux http.RoundTripper by the request's URL.Host field
 type MuxRoundTripper map[string]http.RoundTripper
 
+// NewMuxRoundTripper returns a new NewMuxRoundTripper
+func NewMuxRoundTripper() MuxRoundTripper {
+	return make(MuxRoundTripper)
+}
+
 // Add an http.RoundTripper to the mux with reference to the host.
 // Please note that a fallback http.RoundTripper can be set with
 // host = "*"
