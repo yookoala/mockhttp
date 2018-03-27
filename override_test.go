@@ -69,3 +69,16 @@ func TestUseTransport_locking(t *testing.T) {
 		}
 	}
 }
+
+func ExampleUseTransport_simple() {
+	mock := mockhttp.StaticResponseRT("hello world", "text/plain")
+	mockhttp.UseTransport(&mock)
+
+	resp, _ := http.Get("https://www.google.com")
+	content, _ := ioutil.ReadAll(resp.Body)
+	fmt.Printf("%s", content)
+
+	mockhttp.RestoreTransport()
+
+	// Output: hello world
+}
