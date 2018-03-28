@@ -57,16 +57,26 @@ func TestResponseAddHeader(t *testing.T) {
 func TestUseResponseModifier(t *testing.T) {
 	client := http.Client{
 		Transport: mockhttp.
-			UseResponseModifier(func(resp *http.Response, err error) (*http.Response, error) {
-				newContent := "<html>hello world</html>"
-				resp.StatusCode = http.StatusOK
-				resp.ContentLength = int64(len(newContent))
-				resp.Header.Set("Content-Length", fmt.Sprintf("%d", resp.ContentLength))
-				resp.Header.Set("Content-Type", "text/html")
-				resp.Body = ioutil.NopCloser(strings.NewReader(newContent))
-				return resp, err
-			}).
-			Wrap(mockhttp.ServerErrorRT(http.StatusInternalServerError)),
+			UseResponseModifier(
+				func(resp *http.Response, err error) (*http.Response, error) {
+					// overrides response and error
+					newContent := "<html>hello world</html>"
+					contentLength := int64(len(newContent))
+					resp = &http.Response{
+						StatusCode:    http.StatusFound,
+						ContentLength: contentLength,
+						Header: http.Header{
+							"Content-Type":   []string{"application/xml"},
+							"Content-Length": []string{fmt.Sprintf("%d", contentLength)},
+						},
+						Body: ioutil.NopCloser(strings.NewReader(newContent)),
+					}
+					return resp, nil
+				},
+				mockhttp.ResponseSetStatus(http.StatusOK), // override status
+				mockhttp.ResponseSetHeader("Content-Type", "application/json"),
+				mockhttp.ResponseSetHeader("Content-Type", "text/html"),
+			).Wrap(mockhttp.TransportErrorRT(fmt.Errorf("no network"))),
 	}
 	resp, _ := client.Get("http://foobar.com")
 	content, _ := ioutil.ReadAll(resp.Body)
@@ -97,14 +107,15 @@ func TestChain(t *testing.T) {
 			mockhttp.UseResponseModifier(
 				mockhttp.ResponseSetStatus(http.StatusOK),
 			),
-			mockhttp.UseResponseModifier(func(
-				resp *http.Response, err error) (*http.Response, error) {
-				resp = &http.Response{
-					Body: ioutil.NopCloser(strings.NewReader("hello world")),
-				}
-				err = nil
-				return resp, err
-			}),
+			mockhttp.UseResponseModifier(
+				func(resp *http.Response, err error) (*http.Response, error) {
+					resp = &http.Response{
+						Body: ioutil.NopCloser(strings.NewReader("hello world")),
+					}
+					err = nil
+					return resp, err
+				},
+			),
 		).Wrap(mockhttp.ServerErrorRT(http.StatusInternalServerError)),
 	}
 

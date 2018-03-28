@@ -70,10 +70,19 @@ func (modifier ResponseModifier) Wrap(inner http.RoundTripper) http.RoundTripper
 	})
 }
 
-// UseResponseModifier converts a function that fulfills ResponseModifier
-// signature into Middleware
-func UseResponseModifier(modifier ResponseModifier) Middleware {
-	return modifier
+// UseResponseModifier converts a function / multiple functions that fulfills
+// ResponseModifier signature into one Middleware.
+//
+// If more that 1 modifer is provided, they will be chained from first to last.
+// That means the response and error of inner http.RoundTripper will be the
+// input of the first modifer. Then the output of first modifier will be input
+// of the second modifer. So on and so forth until last one.
+func UseResponseModifier(modifiers ...ResponseModifier) Middleware {
+	modifierChain := make([]Middleware, len(modifiers))
+	for i, j := 0, len(modifiers)-1; i <= j; i++ {
+		modifierChain[j-i] = modifiers[i] // reverse order of modifier
+	}
+	return Chain(modifierChain...)
 }
 
 // Chain wraps the middlware, from outter-most to inner-most, into
