@@ -66,7 +66,7 @@ func TestUseResponseModifier(t *testing.T) {
 				resp.Body = ioutil.NopCloser(strings.NewReader(newContent))
 				return resp, err
 			}).
-			Wrap(mockhttp.ServerErrorRT(http.StatusLocked)),
+			Wrap(mockhttp.ServerErrorRT(http.StatusInternalServerError)),
 	}
 	resp, _ := client.Get("http://foobar.com")
 	content, _ := ioutil.ReadAll(resp.Body)
@@ -93,7 +93,7 @@ func TestChain(t *testing.T) {
 				return resp, err
 			}),
 			mockhttp.UseResponseSetHeader("Content-Type", "text/html"),
-		).Wrap(mockhttp.ServerErrorRT(http.StatusLocked)),
+		).Wrap(mockhttp.ServerErrorRT(http.StatusInternalServerError)),
 	}
 	client.Get("https://api.foobar.com/users/1")
 }
