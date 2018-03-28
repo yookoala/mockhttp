@@ -1,6 +1,8 @@
 package mockhttp
 
-import "net/http"
+import (
+	"net/http"
+)
 
 // Middleware warps an http.RoundTripper
 // and modify the input / output behaviour.
@@ -17,47 +19,44 @@ func (fn MiddlewareFunc) Wrap(inner http.RoundTripper) http.RoundTripper {
 	return fn(inner)
 }
 
-// UseResponseStatus sets the response, if presents, status code
+// ResponseSetStatus sets the response, if presents, status code
 // to the given status
-func UseResponseStatus(status int) Middleware {
-	return MiddlewareFunc(func(inner http.RoundTripper) http.RoundTripper {
-		return RoundTripperFunc(func(r *http.Request) (resp *http.Response, err error) {
-			if resp, err = inner.RoundTrip(r); err != nil {
-				return
-			}
+func ResponseSetStatus(status int) ResponseModifier {
+	return func(resp *http.Response, err error) (*http.Response, error) {
+		if resp != nil {
 			resp.StatusCode = status
 			resp.Status = http.StatusText(status)
-			return
-		})
-	})
+		}
+		return resp, err
+	}
 }
 
-// UseResponseSetHeader sets the response, if presents, header
+// ResponseSetHeader sets the response, if presents, header
 // with given key-value pair
-func UseResponseSetHeader(key, value string) Middleware {
-	return MiddlewareFunc(func(inner http.RoundTripper) http.RoundTripper {
-		return RoundTripperFunc(func(r *http.Request) (resp *http.Response, err error) {
-			if resp, err = inner.RoundTrip(r); err != nil {
-				return
+func ResponseSetHeader(key, value string) ResponseModifier {
+	return func(resp *http.Response, err error) (*http.Response, error) {
+		if resp != nil {
+			if resp.Header == nil {
+				resp.Header = make(http.Header)
 			}
 			resp.Header.Set(key, value)
-			return
-		})
-	})
+		}
+		return resp, err
+	}
 }
 
-// UseResponseAddHeader adds the response, if presents, header
+// ResponseAddHeader adds the response, if presents, header
 // with given key-value pair
-func UseResponseAddHeader(key, value string) Middleware {
-	return MiddlewareFunc(func(inner http.RoundTripper) http.RoundTripper {
-		return RoundTripperFunc(func(r *http.Request) (resp *http.Response, err error) {
-			if resp, err = inner.RoundTrip(r); err != nil {
-				return
+func ResponseAddHeader(key, value string) ResponseModifier {
+	return func(resp *http.Response, err error) (*http.Response, error) {
+		if resp != nil {
+			if resp.Header == nil {
+				resp.Header = make(http.Header)
 			}
 			resp.Header.Add(key, value)
-			return
-		})
-	})
+		}
+		return resp, err
+	}
 }
 
 // ResponseModifier implements Middleware by modifying http.Response and/or error output

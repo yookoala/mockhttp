@@ -10,10 +10,10 @@ import (
 	"github.com/yookoala/mockhttp"
 )
 
-func TestUseResponseStatus(t *testing.T) {
+func TestResponseSetStatus(t *testing.T) {
 	client := http.Client{
 		Transport: mockhttp.
-			UseResponseStatus(http.StatusOK).
+			UseResponseModifier(mockhttp.ResponseSetStatus(http.StatusOK)).
 			Wrap(mockhttp.ServerErrorRT(http.StatusBadGateway)),
 	}
 	resp, _ := client.Get("http://foobar.com")
@@ -27,10 +27,10 @@ func TestUseResponseStatus(t *testing.T) {
 	}
 }
 
-func TestUseResponseSetHeader(t *testing.T) {
+func TestResponseSetHeader(t *testing.T) {
 	client := http.Client{
 		Transport: mockhttp.
-			UseResponseSetHeader("Content-Type", "text/html").
+			UseResponseModifier(mockhttp.ResponseSetHeader("Content-Type", "text/html")).
 			Wrap(mockhttp.StaticResponseRT(`<html>hello world</html>`, "text/plain")),
 	}
 	resp, _ := client.Get("http://foobar.com")
@@ -39,10 +39,10 @@ func TestUseResponseSetHeader(t *testing.T) {
 	}
 }
 
-func TestUseResponseAddHeader(t *testing.T) {
+func TestResponseAddHeader(t *testing.T) {
 	client := http.Client{
 		Transport: mockhttp.
-			UseResponseAddHeader("Content-Type", "text/html").
+			UseResponseModifier(mockhttp.ResponseAddHeader("Content-Type", "text/html")).
 			Wrap(mockhttp.StaticResponseRT(`<html>hello world</html>`, "text/plain")),
 	}
 	resp, _ := client.Get("http://foobar.com")
@@ -88,12 +88,44 @@ func TestUseResponseModifier(t *testing.T) {
 func TestChain(t *testing.T) {
 	client := http.Client{
 		Transport: mockhttp.Chain(
+			mockhttp.UseResponseModifier(
+				mockhttp.ResponseSetHeader("Content-Type", "text/html"),
+			),
+			mockhttp.UseResponseModifier(
+				mockhttp.ResponseSetHeader("Content-Type", "application/json"),
+			),
+			mockhttp.UseResponseModifier(
+				mockhttp.ResponseSetStatus(http.StatusOK),
+			),
 			mockhttp.UseResponseModifier(func(
 				resp *http.Response, err error) (*http.Response, error) {
+				resp = &http.Response{
+					Body: ioutil.NopCloser(strings.NewReader("hello world")),
+				}
+				err = nil
 				return resp, err
 			}),
-			mockhttp.UseResponseSetHeader("Content-Type", "text/html"),
 		).Wrap(mockhttp.ServerErrorRT(http.StatusInternalServerError)),
 	}
-	client.Get("https://api.foobar.com/users/1")
+
+	resp, err := client.Get("https://api.foobar.com/users/1")
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+		return
+	}
+
+	content, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+	}
+
+	if want, have := http.StatusOK, resp.StatusCode; want != have {
+		t.Errorf("expected %#v, got %#v", want, have)
+	}
+	if want, have := http.StatusText(http.StatusOK), resp.Status; want != have {
+		t.Errorf("expected %#v, got %#v", want, have)
+	}
+	if want, have := "hello world", string(content); want != have {
+		t.Errorf("expected %#v, got %#v", want, have)
+	}
 }
